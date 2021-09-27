@@ -1,0 +1,45 @@
+1- Cómo podemos saber si los tuiteros hispanohablantes interactúan más en las noches?
+ > db.tweets.aggregate([{$match:{"user.lang":"es"}},
+ { $group: {"_id":{"hour":{$hour:{$dateFromString:{dateString:"$created_at"}}}},"twiterosXhora":{$sum:1}}},
+ {$sort:{"_id.hour":-1}}])
+   - Para este Query, se vio que los tweets en español de hecho están todos en la tarde noche, depende de a que horas consideres que ya es de noche entonces hay que filtrar
+     con un $match para solo dejar los tweets que son de esa hora: {$match:{"_id.hourTweet":{$gte:19}}},
+ 
+ 2-Cómo podemos saber de dónde son los tuiteros que más tiempo tienen en la plataforma?
+  > db.tweets.aggregate([{ $group: { _id:{leng:"$user.lang","countYear":{$year:{$dateFromString:{dateString:"$user.created_at"}}}}, "conteo": { $sum:1 } } }, 
+  { $lookup: { from: "primarydialects", "localField": "_id.leng", "foreignField": "lang", "as": "language" } }, 
+  { $lookup: { from: "languagenames", "localField": "language.locale", "foreignField": "locale", "as": "fulllocale" }},
+  {$sort:{"_id.countYear":1}}])
+   - Aqui te arroja igual que el que resolvimos en clase, las colecciones completas del languague y fullocale para poder conocer el idioma que hablan los más antiguos
+    pero te cuenta la cantidad de usuarios de cada idioma que se resgistraron cada año
+   
+  > db.tweets.aggregate([{ $group: { _id:{leng:"$user.location","countYear":{$year:{$dateFromString:{dateString:"$user.created_at"}}}}}},
+   {$sort:{"_id.countYear":1}}])
+    - Este agrupa por localización y por año en el que se registro la cuenta, entonces aquí si podemos saber la localización de los twiteros más viejos segund la BD
+    
+3-En intervalos de 7:00:00pm a 6:59:59am y de 7:00:00am a 6:59:59pm, de qué paises la mayoría de los tuits?
+  > db.tweets.aggregate([{ $group: { _id:{leng:"$user.lang","hourTweet":{$hour:{$dateFromString:{dateString:"$created_at"}}}},count:{$sum:1}}},
+  {$match:{$or:[{"_id.hourTweet":{$gte:19}},{"_id.hourTweet":{lte:6}}]}},
+  {$group:{_id:"$_id.leng",tot:{$sum:"$count"}}},
+  {$sort:{"tot":-1}},
+  {$limit:1}])
+  > db.tweets.aggregate([{ $group: { _id:{leng:"$user.lang","hourTweet":{$hour:{$dateFromString:{dateString:"$created_at"}}}},count:{$sum:1}}},
+  {$match:{$or:[{"_id.hourTweet":{$gte:7}},{"_id.hourTweet":{lte:18}}]}},
+  {$group:{_id:"$_id.leng",tot:{$sum:"$count"}}},
+  {$sort:{"tot":-1}},
+  {$limit:1}])
+  
+   - Aquí utilicé dos querys, separando los resultado para amboos horarios, en los querys solo cambia en realidad los rangos que admiten, se utilizó $limit también para solo
+     quedarnos con el mayor de los idiomas, si se omite te regresa todo ordenados por el $sort de mayor a menor.
+     
+4-De qué país son los tuiteros más famosos de nuestra colección?
+ > db.tweets.aggregate([{$group:{"_id":{idioma:"$user.lang",tag:"$user.name",friends:"$user.friends_count"}}},
+ {$sort:{"_id.friends":-1}},
+ {$lookup: {from:"primarydialects","localField":"_id.idioma","foreignField":"lang","as":"language"}},
+ {$lookup: {from:"languagenames","localField":"language.locale","foreignField":"locale","as":"fulllocale"}}])
+  - Aqui utilizamos el idioma para filtrar y nos da el resultado diciendonos el nombre del usuario y el idioma en el que habla, si queremos el país podemos utilizar 
+   la zona horaria
+ >  db.tweets.aggregate([{ $group: { "_id": { pais: "$user.time_zone", tag: "$user.name", friends: "$user.friends_count" } } }, 
+ { $sort: { "_id.friends": -1 } }])
+  - Ordenamos de mayor a menor por la cantidad de amigos (se consideraron los amigos como Followers, o el indicador de popularidad), y de hecho encontramos un registro duplicado
+  pero con diferente número de seguidores
